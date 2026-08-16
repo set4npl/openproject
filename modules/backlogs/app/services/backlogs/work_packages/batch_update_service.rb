@@ -196,18 +196,17 @@ class Backlogs::WorkPackages::BatchUpdateService
   # destination. Mirrors the contract's own assignable_sprints and
   # backlog_bucket_belongs_to_project checks for every placement mode alike.
   def revalidate_target_availability!(target)
-    raise BatchFailure, unavailable_target_failure unless target_available?(target)
-  end
-
-  def target_available?(target)
-    case target
-    in Backlogs::Target::SprintId
-      Sprint.assignable(project: batch_project, user:).exists?(id: target.list_id)
-    in Backlogs::Target::BucketId
-      BacklogBucket.for_project(batch_project).exists?(id: target.list_id)
-    in Backlogs::Target::InboxId
-      true
-    end
+    # Judged on freshly loaded rows, not the batch's loaded instances: a
+    # member's status (hence mobility) may have changed since the controller
+    # load, and this check exists precisely to catch that under the lock.
+    # One query for the whole cohort; the move loop still reloads each
+    # instance before its own move.
+    availability = Backlogs::WorkPackages::DestinationAvailability.new(
+      project: batch_project,
+      user:,
+      work_packages: WorkPackage.where(id: work_packages.map(&:id)).to_a
+    )
+    raise BatchFailure, unavailable_target_failure unless availability.permitted?(target)
   end
 
   def last_non_batch_member(target)
