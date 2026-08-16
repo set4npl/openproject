@@ -140,6 +140,13 @@ export function orderedSelectedItems(root:HTMLElement, keys:ReadonlySet<Selectio
     .filter((item):item is SelectionItem => item !== null && keys.has(selectionKey(item)));
 }
 
+export function orderedSelectedItemElements(root:HTMLElement, keys:ReadonlySet<SelectionKey>):HTMLElement[] {
+  return orderedItemElements(root).filter((item) => {
+    const identity = itemIdentity(item);
+    return identity !== null && keys.has(selectionKey(identity));
+  });
+}
+
 function itemIdentity(itemElement:Element):SelectionItem|null {
   const id = resolveItemId(itemElement);
   const type = resolveItemType(itemElement);

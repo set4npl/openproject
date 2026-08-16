@@ -36,6 +36,7 @@ import {
   liveOrderableListItems,
   neighbourItem,
   orderedItemElements,
+  orderedSelectedItemElements,
   orderedSelectedItems,
   resolveCandidate,
   resolveRangeItems,
@@ -58,6 +59,10 @@ export interface SelectionHost {
   // list's rows are.
   ownerRowsContainer(itemElement:HTMLElement):HTMLElement|null;
 }
+
+export type ActionScope =
+  | { kind:'batch'; invoker:HTMLElement; items:HTMLElement[]; ids:string[] }
+  | { kind:'singular'; invoker:HTMLElement; items:[]; ids:[] };
 
 /**
  * Batch selection: gestures in, model and presentation out.
@@ -94,6 +99,14 @@ export class SelectionOrchestrator {
     }
 
     return [];
+  }
+
+  actionScopeFor(itemElement:HTMLElement):ActionScope {
+    return this.resolveActionScope(itemElement, false);
+  }
+
+  selectForAction(itemElement:HTMLElement):ActionScope {
+    return this.resolveActionScope(itemElement, true);
   }
 
   // A menu move relocates exactly one card, so it collapses like a drag.
@@ -133,6 +146,30 @@ export class SelectionOrchestrator {
 
     this.collapseForDrag(itemElement);
     return [{ type: candidate.type, id: candidate.id }];
+  }
+
+  private resolveActionScope(itemElement:HTMLElement, mutate:boolean):ActionScope {
+    const candidate = resolveCandidate(this.host.rootElement, itemElement);
+    if (!candidate?.orderable) {
+      return { kind: 'singular', invoker: itemElement, items: [], ids: [] };
+    }
+
+    const key = { type: candidate.type, id: candidate.id };
+    if (mutate && !this.selection.has(key)) {
+      this.selection.replace(key, candidate.listKey);
+      this.renderSelection('selection');
+    }
+
+    const items = this.selection.has(key)
+      ? orderedSelectedItemElements(this.host.rootElement, this.selection.keys)
+      : [candidate.itemElement];
+
+    return {
+      kind: 'batch',
+      invoker: itemElement,
+      items,
+      ids: items.map((item) => resolveItemId(item)).filter((id):id is string => id !== null),
+    };
   }
 
   // Silent: the move announcement is the feedback, and "Selection cleared."
