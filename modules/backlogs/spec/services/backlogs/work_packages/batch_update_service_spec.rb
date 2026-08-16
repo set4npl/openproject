@@ -255,9 +255,9 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
     it "acquires the batch and predecessor locks in ascending id order" do
       locked = []
       allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
-        .and_wrap_original do |method, entry, *args, &block|
-          locked << entry.id
-          method.call(entry, *args, &block)
+        .and_wrap_original do |method, entry, suffix = nil, *args, &block|
+          locked << [entry, suffix]
+          method.call(entry, suffix, *args, &block)
         end
 
       # Deliberately out-of-order input, predecessor id between them.
@@ -265,15 +265,17 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
         .call(list_type: "sprint", list_id: sprint.id.to_s, prev_id: sprint_wp2.id.to_s)
 
       batch_and_predecessor = [sprint_wp3.id, sprint_wp1.id, sprint_wp2.id].sort
-      expect(locked.first(3)).to eq batch_and_predecessor
+      expect(locked.first).to eq [sprint, nil]
+      work_package_locks = locked.filter_map { |entry, _suffix| entry.id if entry.is_a?(WorkPackage) }
+      expect(work_package_locks.first(3)).to eq batch_and_predecessor
     end
 
     it "locks the implicit append anchor for an absent prev_id" do
       locked = []
       allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
-        .and_wrap_original do |method, entry, *args, &block|
-          locked << entry.id
-          method.call(entry, *args, &block)
+        .and_wrap_original do |method, entry, suffix = nil, *args, &block|
+          locked << [entry, suffix]
+          method.call(entry, suffix, *args, &block)
         end
 
       # Appending bucket_wp1 to the sprint: the real anchor is sprint_wp3
@@ -282,7 +284,41 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
       service([bucket_wp1])
         .call(list_type: "sprint", list_id: sprint.id.to_s)
 
-      expect(locked.first(2)).to eq [bucket_wp1.id, sprint_wp3.id].sort
+      expect(locked.first(2)).to eq [
+        [sprint, nil],
+        [project, "backlogs_batch_update_destination_sprint_#{sprint.id}"]
+      ]
+      work_package_locks = locked.filter_map { |entry, _suffix| entry.id if entry.is_a?(WorkPackage) }
+      expect(work_package_locks.first(2)).to eq [bucket_wp1.id, sprint_wp3.id].sort
+    end
+
+    it "takes the destination lifecycle lock before work-package locks for top placement" do
+      locked = []
+      allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
+        .and_wrap_original do |method, entry, suffix = nil, *args, &block|
+          locked << [entry, suffix]
+          method.call(entry, suffix, *args, &block)
+        end
+
+      service([sprint_wp2])
+        .call(list_type: "backlog_bucket", list_id: bucket.id.to_s, prev_id: "")
+
+      expect(locked.first).to eq [bucket, nil]
+      first_work_package_lock = locked.find { |entry, _suffix| entry.is_a?(WorkPackage) }
+      expect(first_work_package_lock).to eq [sprint_wp2, nil]
+    end
+
+    it "takes the project and inbox append lock before work-package locks" do
+      locked = []
+      allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
+        .and_wrap_original do |method, entry, suffix = nil, *args, &block|
+          locked << [entry, suffix]
+          method.call(entry, suffix, *args, &block)
+        end
+
+      service([sprint_wp1]).call(list_type: "inbox")
+
+      expect(locked.first).to eq [project, "backlogs_batch_update_destination_inbox"]
     end
   end
 
@@ -352,6 +388,16 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
       expect(result.message)
         .to eq I18n.t("backlogs.work_packages.batch_update_service.unavailable_target")
       expect(sprint_order).to eq [sprint_wp1.id, sprint_wp2.id, sprint_wp3.id]
+    end
+
+    it "locks and reloads the authoritative backlog bucket row before policy" do
+      recorder = ActiveRecord::QueryRecorder.new do
+        service([sprint_wp1])
+          .call(list_type: "backlog_bucket", list_id: bucket.id.to_s, prev_id: "")
+      end
+
+      bucket_lock_queries = recorder.log.grep(/FROM "backlog_buckets".*FOR UPDATE/)
+      expect(bucket_lock_queries.size).to eq 1
     end
   end
 

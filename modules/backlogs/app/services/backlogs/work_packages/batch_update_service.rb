@@ -57,9 +57,9 @@ class Backlogs::WorkPackages::BatchUpdateService
   end
 
   # :explicit (nonblank prev_id), :top (blank prev_id, no anchor) or :append
-  # (absent prev_id → the last non-batch member of the target). The append
-  # anchor is resolved before any lock is taken so it joins the lock set and
-  # can be revalidated under it; a nil anchor means an empty target.
+  # (absent prev_id → the last non-batch member of the target, read under the
+  # append lock so it joins the lock set and can be revalidated under it); a
+  # nil anchor means an empty target.
   Placement = Data.define(:mode, :anchor) do
     def initial_prev_id = anchor ? anchor.id.to_s : ""
   end
@@ -73,41 +73,48 @@ class Backlogs::WorkPackages::BatchUpdateService
     # concurrent move could have relocated.
     @batch_project_id = work_packages.first.project_id
     @batch_project = work_packages.first.project
-
-    placement = resolve_placement(target, prev_id)
-    return placement if placement.is_a?(ServiceResult)
+    destination = raw_destination(target)
 
     moved = []
 
     WorkPackage.transaction do
-      with_ordered_locks(lock_entries(placement.anchor)) do
-        revalidate_cohort!
-        revalidate_target_availability!(target)
-        revalidate_anchor!(placement, target)
-        current_prev_id = placement.initial_prev_id
+      with_destination_lifecycle_lock(destination) do
+        with_append_serialization_lock(target, prev_id) do
+          placement = resolve_placement(target, prev_id)
+          raise BatchFailure, placement if placement.is_a?(ServiceResult)
 
-        work_packages.each do |work_package|
-          # An earlier member's move_after shifts other rows' positions
-          # through update_all without touching their loaded Ruby objects,
-          # and remove_from_list uses the in-memory position as the threshold
-          # it decrements from — a stale read corrupts the positions it
-          # writes rather than merely misreporting them.
-          work_package.reload
-          inner = Backlogs::WorkPackages::UpdateService
-            .new(user:, work_package:)
-            .call(list_type:, list_id:, prev_id: current_prev_id)
+          with_ordered_locks(lock_entries(placement.anchor)) do
+            revalidate_cohort!
+            lock_destination_row!(destination)
+            revalidate_target_availability!(target)
+            revalidate_anchor!(placement, target)
+            current_prev_id = placement.initial_prev_id
 
-          raise BatchFailure, inner if inner.failure?
+            work_packages.each do |work_package|
+              # An earlier member's move_after shifts other rows' positions
+              # through update_all without touching their loaded Ruby objects,
+              # and remove_from_list uses the in-memory position as the
+              # threshold it decrements from — a stale read corrupts the
+              # positions it writes rather than merely misreporting them.
+              work_package.reload
+              inner = Backlogs::WorkPackages::UpdateService
+                .new(user:, work_package:)
+                .call(list_type:, list_id:, prev_id: current_prev_id)
 
-          moved << inner.result
-          current_prev_id = inner.result.id.to_s
+              raise BatchFailure, inner if inner.failure?
+
+              moved << inner.result
+              current_prev_id = inner.result.id.to_s
+            end
+
+            # WorkPackage#call_after_update_hook builds its context from
+            # `self`, so without this a hook consumer observes the interim
+            # position a later member's update_all left behind. Still inside
+            # the lock and the outer transaction, so the hooks fire against
+            # final rows.
+            moved.each(&:reload)
+          end
         end
-
-        # WorkPackage#call_after_update_hook builds its context from `self`,
-        # so without this a hook consumer observes the interim position a
-        # later member's update_all left behind. Still inside the lock and
-        # the outer transaction, so the hooks fire against final rows.
-        moved.each(&:reload)
       end
     end
 
@@ -123,6 +130,30 @@ class Backlogs::WorkPackages::BatchUpdateService
   end
 
   private
+
+  # Sprint lifecycle services serialize on the destination's own model mutex
+  # before enumerating and moving its work packages, so joining it here is
+  # what orders a batch move against a concurrent completion or deletion.
+  # The full order is destination model → optional append → ascending
+  # work-package advisories → destination row → policy → persistence.
+  # Inbox has no lifecycle record and falls through.
+  def with_destination_lifecycle_lock(destination, &)
+    return yield unless destination
+
+    OpenProject::Mutex.with_advisory_lock_transaction(destination, &)
+  end
+
+  # An empty target has no work-package row for competing appenders to meet
+  # on, so append placement is serialized by project and destination instead.
+  # Taken after the lifecycle mutex and before the work-package set to keep
+  # one stable order; the advisory lock is transaction-scoped and outlives
+  # this block. Inbox relies on this lock alone.
+  def with_append_serialization_lock(target, prev_id, &)
+    return yield unless prev_id.nil?
+
+    suffix = ["backlogs_batch_update_destination", target.list_type, target.list_id].compact.join("_")
+    OpenProject::Mutex.with_advisory_lock_transaction(batch_project, suffix, &)
+  end
 
   # Ascending id order, so two overlapping batches request the same lock
   # sequence and neither waits on the other while holding one (the lock
@@ -207,6 +238,29 @@ class Backlogs::WorkPackages::BatchUpdateService
       work_packages: WorkPackage.where(id: work_packages.map(&:id)).to_a
     )
     raise BatchFailure, unavailable_target_failure unless availability.permitted?(target)
+  end
+
+  # Unscoped by policy so completion, deletion and reassignment all resolve
+  # to the same advisory identity. DestinationAvailability stays the
+  # authority once the locks have refreshed state.
+  def raw_destination(target)
+    case target
+    in Backlogs::Target::SprintId
+      Sprint.find_by(id: target.list_id)
+    in Backlogs::Target::BucketId
+      BacklogBucket.find_by(id: target.list_id)
+    in Backlogs::Target::InboxId
+      nil
+    end
+  end
+
+  # lock! reloads under FOR UPDATE, so a concurrent completion, deletion or
+  # reassignment commits before the candidate query above runs. Inbox has no
+  # destination row; its append is serialized by the advisory lock alone.
+  def lock_destination_row!(destination)
+    destination&.lock!
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
   def last_non_batch_member(target)
