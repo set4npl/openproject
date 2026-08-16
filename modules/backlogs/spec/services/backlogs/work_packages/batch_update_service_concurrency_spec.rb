@@ -190,6 +190,75 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService,
   # rubocop:enable RSpec/ExampleLength
 
   # rubocop:disable RSpec/ExampleLength
+  it "serializes whitespace-top moves before placing into an empty inbox", retry: 0 do
+    first_service = described_class.new(user:, work_packages: sprint_work_packages)
+    second_service = described_class.new(user:, work_packages: bucket_work_packages)
+    first_placed = Concurrent::Event.new
+    release_first = Concurrent::Event.new
+    release_second = Concurrent::Event.new
+    second_progress = Queue.new
+
+    allow(first_service).to receive(:with_ordered_locks).and_wrap_original do |method, entries, index = 0, &block|
+      result = method.call(entries, index, &block)
+      if index.zero? && entries.all?(WorkPackage)
+        first_placed.set
+        raise "timed out waiting to commit the first top move" unless release_first.wait(5)
+      end
+      result
+    end
+    allow(second_service).to receive(:with_ordered_locks).and_wrap_original do |method, entries, index = 0, &block|
+      result = method.call(entries, index, &block)
+      if index.zero? && entries.all?(WorkPackage)
+        second_progress << :placement_finished
+        raise "timed out waiting to commit the second top move" unless release_second.wait(5)
+      end
+      result
+    end
+    allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
+      .and_wrap_original do |method, entry, suffix = nil, *args, &block|
+        if Thread.current[:batch_top] == :second &&
+           entry == project && suffix == "backlogs_batch_update_destination_inbox"
+          second_progress << :target_lock_attempted
+        end
+        method.call(entry, suffix, *args, &block)
+      end
+
+    first_thread = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        Thread.current[:batch_top] = :first
+        first_service.call(list_type: "inbox", prev_id: " \t")
+      end
+    end
+    raise "first top move did not reach the commit barrier" unless first_placed.wait(5)
+
+    second_thread = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        Thread.current[:batch_top] = :second
+        second_service.call(list_type: "inbox", prev_id: " \t")
+      end
+    end
+
+    observed_progress = Timeout.timeout(5) { second_progress.pop }
+    release_first.set
+    release_second.set
+    first_result = first_thread.value
+    second_result = second_thread.value
+
+    expect([first_result, second_result]).to all(be_success)
+    inbox_work_packages = WorkPackage.where(project:, sprint_id: nil, backlog_bucket_id: nil)
+    expect(inbox_work_packages.order(:position).pluck(:position)).to eq [1, 2, 3, 4]
+    expect(inbox_work_packages.order(:position).pluck(:id))
+      .to eq [*bucket_work_packages.map(&:id), *sprint_work_packages.map(&:id)]
+    expect(observed_progress).to eq :target_lock_attempted
+  ensure
+    cleanup_concurrency_threads(
+      release_events: [release_first, release_second],
+      threads: [first_thread, second_thread]
+    )
+  end
+  # rubocop:enable RSpec/ExampleLength
+
+  # rubocop:disable RSpec/ExampleLength
   it "waits for a destination mutation before checking a same-list move", retry: 0 do
     release_mutation = Concurrent::Event.new
     mutation_ready = Concurrent::Event.new
@@ -325,6 +394,75 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService,
     expect(WorkPackage.where(id: original_cohort).pluck(:sprint_id)).to all(be_nil)
     expect(source_sprint.work_packages_for(project)).to be_empty
     expect(append_work_package.reload).to have_attributes(backlog_bucket: source_bucket, sprint_id: nil)
+  ensure
+    cleanup_concurrency_threads(
+      release_events: [release_finish],
+      threads: [finish_thread, batch_thread]
+    )
+  end
+  # rubocop:enable RSpec/ExampleLength
+
+  # rubocop:disable RSpec/ExampleLength
+  it "waits for sprint finish before moving its enumerated cohort out", retry: 0 do
+    finish_paused = Concurrent::Event.new
+    release_finish = Concurrent::Event.new
+    batch_progress = Queue.new
+    batch_result = Queue.new
+    moving_work_package = sprint_work_packages.last
+    original_cohort = sprint_work_packages.map(&:id)
+    move_service = described_class.new(user:, work_packages: [moving_work_package])
+
+    allow(WorkPackages::UpdateService).to receive(:new).and_wrap_original do |method, *args, **kwargs|
+      if Thread.current[:finish_move_out_race] && !Thread.current[:finish_paused]
+        Thread.current[:finish_paused] = true
+        finish_paused.set
+        raise "timed out waiting to continue sprint finish" unless release_finish.wait(5)
+      end
+
+      method.call(*args, **kwargs)
+    end
+    allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
+      .and_wrap_original do |method, entry, *args, &block|
+        if Thread.current[:finish_move_out_batch] && entry.is_a?(Sprint) && entry.id == source_sprint.id
+          batch_progress << :source_lock_attempted
+        end
+        method.call(entry, *args, &block)
+      end
+
+    finish_thread = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        Thread.current[:finish_move_out_race] = true
+        Backlogs::Sprints::FinishService
+          .new(user:, model: source_sprint)
+          .call(unfinished_action: "move_to_top_of_backlog")
+      end
+    end
+    raise "sprint finish did not enumerate its cohort" unless finish_paused.wait(5)
+
+    batch_thread = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        Thread.current[:finish_move_out_batch] = true
+        result = move_service.call(list_type: "backlog_bucket", list_id: empty_bucket.id.to_s)
+        batch_result << result
+        batch_progress << :batch_finished
+      end
+    end
+
+    observed_progress = Timeout.timeout(5) { batch_progress.pop }
+    release_finish.set
+    finish_result = finish_thread.value
+    batch_thread.value
+    move_result = Timeout.timeout(5) { batch_result.pop }
+
+    expect(observed_progress).to eq :source_lock_attempted
+    expect(finish_result).to be_success
+    expect(move_result).to be_failure
+    expect(move_result.message)
+      .to eq I18n.t("backlogs.work_packages.batch_update_service.stale_batch")
+    expect(source_sprint.reload).to be_completed
+    expect(WorkPackage.where(id: original_cohort).pluck(:sprint_id)).to all(be_nil)
+    expect(WorkPackage.where(id: original_cohort).pluck(:backlog_bucket_id)).to all(be_nil)
+    expect(empty_bucket.work_packages).to be_empty
   ensure
     cleanup_concurrency_threads(
       release_events: [release_finish],

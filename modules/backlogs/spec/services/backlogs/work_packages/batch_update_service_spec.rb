@@ -284,7 +284,8 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
       service([bucket_wp1])
         .call(list_type: "sprint", list_id: sprint.id.to_s)
 
-      expect(locked.first(2)).to eq [
+      expect(locked.first(3)).to eq [
+        [bucket, nil],
         [sprint, nil],
         [project, "backlogs_batch_update_destination_sprint_#{sprint.id}"]
       ]
@@ -303,12 +304,16 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
       service([sprint_wp2])
         .call(list_type: "backlog_bucket", list_id: bucket.id.to_s, prev_id: "")
 
-      expect(locked.first).to eq [bucket, nil]
+      expect(locked.first(3)).to eq [
+        [bucket, nil],
+        [sprint, nil],
+        [project, "backlogs_batch_update_destination_backlog_bucket_#{bucket.id}"]
+      ]
       first_work_package_lock = locked.find { |entry, _suffix| entry.is_a?(WorkPackage) }
       expect(first_work_package_lock).to eq [sprint_wp2, nil]
     end
 
-    it "takes the project and inbox append lock before work-package locks" do
+    it "takes the source lifecycle and inbox placement locks before work-package locks" do
       locked = []
       allow(OpenProject::Mutex).to receive(:with_advisory_lock_transaction)
         .and_wrap_original do |method, entry, suffix = nil, *args, &block|
@@ -318,7 +323,36 @@ RSpec.describe Backlogs::WorkPackages::BatchUpdateService, type: :model do
 
       service([sprint_wp1]).call(list_type: "inbox")
 
-      expect(locked.first).to eq [project, "backlogs_batch_update_destination_inbox"]
+      expect(locked.first(2)).to eq [
+        [sprint, nil],
+        [project, "backlogs_batch_update_destination_inbox"]
+      ]
+    end
+
+    it "orders lifecycle locks by the concrete mutex identity" do
+      stub_const("ArchivedSprint", Class.new(Sprint))
+      concrete_sprint = sprint.becomes(ArchivedSprint)
+      batch = service([bucket_wp1])
+      lock_names = []
+
+      allow(batch).to receive(:raw_destination).and_wrap_original do |method, target|
+        destination = method.call(target)
+        destination.is_a?(Sprint) && destination.id == sprint.id ? concrete_sprint : destination
+      end
+      allow(OpenProject::Mutex)
+        .to receive(:with_advisory_lock)
+        .and_wrap_original do |method, resource_class, lock_name, *args, &block|
+          lock_names << lock_name
+          method.call(resource_class, lock_name, *args, &block)
+        end
+
+      result = batch.call(list_type: "sprint", list_id: sprint.id.to_s, prev_id: "")
+
+      expect(result).to be_success
+      expect(lock_names.grep(/mutex_on_(ArchivedSprint|BacklogBucket)_/).first(2)).to eq [
+        "mutex_on_ArchivedSprint_#{sprint.id}",
+        "mutex_on_BacklogBucket_#{bucket.id}"
+      ]
     end
   end
 

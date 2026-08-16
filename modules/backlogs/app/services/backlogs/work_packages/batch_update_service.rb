@@ -73,13 +73,17 @@ class Backlogs::WorkPackages::BatchUpdateService
     # concurrent move could have relocated.
     @batch_project_id = work_packages.first.project_id
     @batch_project = work_packages.first.project
+    @batch_source_targets = work_packages.to_h do |work_package|
+      [work_package.id, Backlogs::Target.for_work_package(work_package)]
+    end
     destination = raw_destination(target)
+    lifecycle_records = ordered_lifecycle_records(destination)
 
     moved = []
 
     WorkPackage.transaction do
-      with_destination_lifecycle_lock(destination) do
-        with_append_serialization_lock(target, prev_id) do
+      with_ordered_locks(lifecycle_records) do
+        with_target_placement_serialization_lock(target, prev_id) do
           placement = resolve_placement(target, prev_id)
           raise BatchFailure, placement if placement.is_a?(ServiceResult)
 
@@ -131,25 +135,32 @@ class Backlogs::WorkPackages::BatchUpdateService
 
   private
 
-  # Sprint lifecycle services serialize on the destination's own model mutex
-  # before enumerating and moving its work packages, so joining it here is
-  # what orders a batch move against a concurrent completion or deletion.
-  # The full order is destination model → optional append → ascending
-  # work-package advisories → destination row → policy → persistence.
-  # Inbox has no lifecycle record and falls through.
-  def with_destination_lifecycle_lock(destination, &)
-    return yield unless destination
+  # Sprint lifecycle services serialize on the Sprint model mutex before
+  # enumerating and moving their work packages, so a batch has to join every
+  # source lifecycle as well as the target's: locking only the target lets a
+  # batch move a member out after FinishService has enumerated it. Sorted by
+  # class and id, so two batches with inverse source/target pairs cannot
+  # deadlock.
+  def ordered_lifecycle_records(destination)
+    source_records = @batch_source_targets.values.uniq.filter_map { |target| raw_destination(target) }
 
-    OpenProject::Mutex.with_advisory_lock_transaction(destination, &)
+    (source_records + [destination])
+      .compact
+      .uniq { |record| lifecycle_lock_identity(record) }
+      .sort_by { |record| lifecycle_lock_identity(record) }
   end
 
-  # An empty target has no work-package row for competing appenders to meet
-  # on, so append placement is serialized by project and destination instead.
-  # Taken after the lifecycle mutex and before the work-package set to keep
-  # one stable order; the advisory lock is transaction-scoped and outlives
-  # this block. Inbox relies on this lock alone.
-  def with_append_serialization_lock(target, prev_id, &)
-    return yield unless prev_id.nil?
+  def lifecycle_lock_identity(record)
+    [record.class.name, record.id]
+  end
+
+  # Unanchored placement depends on target-relative state no row can carry:
+  # in an empty Inbox two batches would otherwise both commit positions 1..N.
+  # Explicit placement needs none of this, being serialized by its anchor's
+  # own lock. Taken after the lifecycle mutexes and before the work-package
+  # set, and held until the outer transaction commits.
+  def with_target_placement_serialization_lock(target, prev_id, &)
+    return yield if prev_id.present?
 
     suffix = ["backlogs_batch_update_destination", target.list_type, target.list_id].compact.join("_")
     OpenProject::Mutex.with_advisory_lock_transaction(batch_project, suffix, &)
@@ -187,17 +198,26 @@ class Backlogs::WorkPackages::BatchUpdateService
     anchor ? Placement.new(mode: :explicit, anchor:) : stale_predecessor_failure
   end
 
-  # A member could have been moved to another project, or deleted, between
-  # the controller loading the batch and the locks being taken. A hopped
-  # member would move in a different acts_as_list scope, splitting the
-  # block, and the chained prev_id would then cross scopes into
-  # move_after's silent insert-at-top. One count catches both: it falls
-  # short for a hopped or a deleted member.
+  # A member could have been moved to another project, or out of its source
+  # container by a lifecycle service, or deleted, between the controller
+  # loading the batch and the locks being taken. A hopped member would move
+  # in a different acts_as_list scope, splitting the block, and the chained
+  # prev_id would then cross scopes into move_after's silent insert-at-top.
+  # One query catches all three: it comes back short for a deleted member.
   def revalidate_cohort!
-    matching = WorkPackage.where(id: work_packages.map(&:id), project_id: batch_project_id).count
-    return if matching == work_packages.size
+    return if cohort_intact?
 
     raise BatchFailure, stale_batch_failure
+  end
+
+  def cohort_intact?
+    current = WorkPackage
+      .where(id: work_packages.map(&:id), project_id: batch_project_id)
+      .select(:id, :sprint_id, :backlog_bucket_id)
+
+    current.size == work_packages.size && current.all? do |work_package|
+      Backlogs::Target.for_work_package(work_package) == batch_source_targets.fetch(work_package.id)
+    end
   end
 
   # Under lock the anchor must still be what placement resolution saw: same
@@ -277,6 +297,10 @@ class Backlogs::WorkPackages::BatchUpdateService
 
   def batch_project
     @batch_project
+  end
+
+  def batch_source_targets
+    @batch_source_targets
   end
 
   def invalid_target_failure
