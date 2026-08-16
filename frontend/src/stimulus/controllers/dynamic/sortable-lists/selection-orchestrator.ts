@@ -109,11 +109,6 @@ export class SelectionOrchestrator {
     return this.resolveActionScope(itemElement, true);
   }
 
-  // A menu move relocates exactly one card, so it collapses like a drag.
-  collapseForMove(itemElement:HTMLElement):void {
-    this.collapseForDrag(itemElement);
-  }
-
   collapseForDrag(itemElement:HTMLElement):void {
     // Nothing selected is nothing to collapse: a drag must not manufacture
     // a one-card batch.
