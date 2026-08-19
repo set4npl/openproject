@@ -59,7 +59,6 @@ import {
   SortableActionMenu,
   type ActionAvailability,
   type ActionMenuElements,
-  type ActionMenuLabels,
 } from './action-menu';
 import { renderDragPreview } from './preview';
 import type { ActionScope } from './selection-orchestrator';
@@ -98,12 +97,11 @@ export default class ItemController extends Controller<HTMLElement> implements R
     externalUrl: String,
     hideUnavailable: { type: Boolean, default: true },
     label: String,
-    // I18n key (with count plurals) naming the menu while it is batch-scoped.
-    batchMenuLabelKey: String,
-    // The menu's singular name, server-rendered: the invoker tooltip's own
-    // text is no restore source, since a Turbo snapshot can capture it
-    // mid-rename. Renaming only engages when both label values are present.
-    singularMenuLabel: String,
+    // I18n key naming the menu, pluralized on the size of the scope it acts
+    // on. The invoker tooltip's own text is no restore source, since a Turbo
+    // snapshot can capture it mid-rename; a consumer that sets no key keeps
+    // the server-rendered name in every scope.
+    menuLabelKey: String,
     // See ItemMobility in list-dom. A `confined` item is still a full drag
     // source; only its own list accepts it as a drop target, so a release
     // anywhere else lands nowhere and the item stays put.
@@ -119,10 +117,8 @@ export default class ItemController extends Controller<HTMLElement> implements R
   declare readonly hideUnavailableValue:boolean;
   declare readonly labelValue:string;
   declare readonly hasLabelValue:boolean;
-  declare readonly batchMenuLabelKeyValue:string;
-  declare readonly hasBatchMenuLabelKeyValue:boolean;
-  declare readonly singularMenuLabelValue:string;
-  declare readonly hasSingularMenuLabelValue:boolean;
+  declare readonly menuLabelKeyValue:string;
+  declare readonly hasMenuLabelKeyValue:boolean;
   declare readonly mobilityValue:string;
 
   declare readonly handleTarget:HTMLElement;
@@ -617,7 +613,7 @@ export default class ItemController extends Controller<HTMLElement> implements R
     if (this.projectedMenuElement !== this.menuElement) {
       const wasOpen = this.menu?.isOpen ?? false;
       this.projectedMenuElement = this.menuElement;
-      this.menu = new SortableActionMenu(this.menuElement, this.hideUnavailableValue, this.menuLabels());
+      this.menu = new SortableActionMenu(this.menuElement, this.hideUnavailableValue, this.menuLabelKey());
       if (wasOpen) {
         this.menu.opening();
       }
@@ -626,13 +622,8 @@ export default class ItemController extends Controller<HTMLElement> implements R
     return this.menu ?? null;
   }
 
-  // A consumer that names neither scope keeps the server-rendered name in both.
-  private menuLabels():ActionMenuLabels|null {
-    if (!this.hasBatchMenuLabelKeyValue || !this.hasSingularMenuLabelValue) {
-      return null;
-    }
-
-    return { batchKey: this.batchMenuLabelKeyValue, singular: this.singularMenuLabelValue };
+  private menuLabelKey():string|null {
+    return this.hasMenuLabelKeyValue ? this.menuLabelKeyValue : null;
   }
 
   private menuElements():ActionMenuElements {
