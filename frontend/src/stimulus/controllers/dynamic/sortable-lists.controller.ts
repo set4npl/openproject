@@ -49,8 +49,8 @@ import {
 import { type SelectionItem } from 'core-common/batch-selection';
 import {
   captureRowPositions,
-  isConfinedItem,
   isOrderableItem,
+  itemAcceptsDestination,
   reorderRows,
   resolveBlockMove,
   resolveBlockMoveAvailability,
@@ -276,10 +276,14 @@ export default class SortableListsController extends Controller<HTMLElement> imp
   private ownerDestinationOf(item:HTMLElement):DestinationIdentity|null {
     const listData = this.ownerListOf(item)?.listData;
 
-    return listData ? {
+    return listData ? this.destinationOf(listData) : null;
+  }
+
+  private destinationOf(listData:SortableListData):DestinationIdentity {
+    return {
       type: listData.type,
       id: listData.listId == null ? null : String(listData.listId),
-    } : null;
+    };
   }
 
   // Frozen at drag start and consumed exactly once per drop, cancelled ones
@@ -301,19 +305,35 @@ export default class SortableListsController extends Controller<HTMLElement> imp
     return this.activeDragBatch?.length ?? 0;
   }
 
-  // Confined when the item is, or when any batch-mate the drag would carry
-  // is. Members are same-list by construction, so one confined member pins
-  // the whole block to the list they all sit in.
-  dragConfined(itemElement:HTMLElement):boolean {
-    if (isConfinedItem(itemElement)) {
-      return true;
-    }
+  // The lists every member of the prospective batch accepts, null when the
+  // block reaches all of them. A batch may span lists, so a member that only
+  // accepts its own pins the block there, never to the dragged card's list.
+  // Null rather than every list element: the payload freezes at drag start,
+  // and a morph that replaces a list mid-drag must not refuse an unrestricted
+  // block whose frozen elements have left the document.
+  dragPermittedLists(itemElement:HTMLElement):HTMLElement[]|null {
+    const batch = this.prospectiveDragBatchElements(itemElement);
+    const members = batch.length > 0 ? batch : [itemElement];
+    const ownerDestinationOf = (item:HTMLElement) => this.ownerDestinationOf(item);
 
-    const mates = this.selection?.prospectiveDragMates(itemElement) ?? [];
-    return mates.some((mate) => {
-      const element = this.itemElementFor(mate);
-      return element !== null && isConfinedItem(element);
+    const lists = this.ownedListOutlets();
+    const permitted = lists.filter((list) => {
+      const destination = this.destinationOf(list.listData);
+      return members.every((member) => itemAcceptsDestination(member, destination, ownerDestinationOf));
     });
+
+    return permitted.length === lists.length ? null : permitted.map((list) => list.element);
+  }
+
+  private prospectiveDragBatchElements(itemElement:HTMLElement):HTMLElement[] {
+    return (this.selection?.prospectiveDragBatch(itemElement) ?? [])
+      .map((member) => this.itemElementFor(member))
+      .filter((element):element is HTMLElement => element !== null);
+  }
+
+  // Outlets match document-wide; another root's lists are not ours.
+  private ownedListOutlets() {
+    return this.sortableListsListOutlets.filter((list) => this.element.contains(list.element));
   }
 
   // Marked on the item element itself, the same one the item controller's

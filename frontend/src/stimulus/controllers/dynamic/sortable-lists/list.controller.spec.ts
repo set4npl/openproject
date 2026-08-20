@@ -85,7 +85,7 @@ describe('Sortable lists list controller', () => {
       ownerRowsContainer: vi.fn(() => null),
       beginDragBatch: vi.fn(),
       activeDragBatchCount: vi.fn(() => 0),
-      dragConfined: vi.fn(() => false),
+      dragPermittedLists: vi.fn(() => null),
     };
   }
 
@@ -127,10 +127,13 @@ describe('Sortable lists list controller', () => {
   function source(
     rootElement:HTMLElement|null,
     type = 'work_package',
-    { confined = false, sourceListElement = null }:{ confined?:boolean; sourceListElement?:HTMLElement|null } = {},
+    { permittedListElements = null, sourceListElement = null }:{
+      permittedListElements?:HTMLElement[]|null;
+      sourceListElement?:HTMLElement|null;
+    } = {},
   ) {
     return {
-      data: sortableItemData({ itemId: '1', type, rootElement, confined, sourceListElement }),
+      data: sortableItemData({ itemId: '1', type, rootElement, permittedListElements, sourceListElement }),
       element: document.createElement('li'),
     } as never;
   }
@@ -247,7 +250,7 @@ describe('Sortable lists list controller', () => {
     expect(dropTargetOptionsFor(list)?.canDrop?.({
       element: list,
       input: {} as never,
-      source: source(root, 'work_package', { confined: true, sourceListElement: document.createElement('ul') }),
+      source: source(root, 'work_package', { permittedListElements: [document.createElement('ul')] }),
     })).toBe(true);
   });
 
@@ -310,7 +313,7 @@ describe('Sortable lists list controller', () => {
 
     options?.onDragEnter?.({
       location: locationOver(),
-      source: source(rootElement, 'work_package', { confined: true, sourceListElement: document.createElement('ul') }),
+      source: source(rootElement, 'work_package', { permittedListElements: [document.createElement('ul')] }),
     } as never);
 
     expect(list.dataset.dropContainer).toEqual('refused');
@@ -323,7 +326,7 @@ describe('Sortable lists list controller', () => {
 
     options?.onDragEnter?.({
       location: locationOver(),
-      source: source(rootElement, 'work_package', { confined: true, sourceListElement: list }),
+      source: source(rootElement, 'work_package', { permittedListElements: [list] }),
     } as never);
 
     expect(list.dataset.dropContainer).toEqual('active');
@@ -336,7 +339,7 @@ describe('Sortable lists list controller', () => {
 
     options?.onDragEnter?.({
       location: locationOver(),
-      source: source(rootElement, 'work_package', { confined: true, sourceListElement: document.createElement('ul') }),
+      source: source(rootElement, 'work_package', { permittedListElements: [document.createElement('ul')] }),
     } as never);
     expect(list.dataset.dropContainer).toEqual('refused');
 

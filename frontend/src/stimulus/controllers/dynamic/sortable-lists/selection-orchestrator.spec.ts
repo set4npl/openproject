@@ -524,13 +524,13 @@ describe('SelectionOrchestrator', () => {
 
   // Consulted while the drag payload is built, so it reads the live
   // selection without freezing or collapsing.
-  describe('prospectiveDragMates', () => {
+  describe('prospectiveDragBatch', () => {
     it('returns the ordered selection for a selected member without touching it', () => {
       const orchestrator = new SelectionOrchestrator(hostFor(root));
       orchestrator.handleClick(clickOn(item('1')));
       orchestrator.handleClick(clickOn(item('3'), { metaKey: true }));
 
-      expect(orchestrator.prospectiveDragMates(item('1'))).toEqual([
+      expect(orchestrator.prospectiveDragBatch(item('1'))).toEqual([
         { type: 'work_package', id: '1' },
         { type: 'work_package', id: '3' },
       ]);
@@ -542,7 +542,7 @@ describe('SelectionOrchestrator', () => {
       orchestrator.handleClick(clickOn(item('1')));
       orchestrator.handleClick(clickOn(item('3'), { metaKey: true }));
 
-      expect(orchestrator.prospectiveDragMates(item('2'))).toEqual([]);
+      expect(orchestrator.prospectiveDragBatch(item('2'))).toEqual([]);
       expect(orchestrator.selectedIds()).toEqual(['1', '3']);
     });
 
@@ -550,7 +550,7 @@ describe('SelectionOrchestrator', () => {
       item('2').setAttribute('data-sortable-lists--item-mobility-value', 'fixed');
       const orchestrator = new SelectionOrchestrator(hostFor(root));
 
-      expect(orchestrator.prospectiveDragMates(item('2'))).toEqual([]);
+      expect(orchestrator.prospectiveDragBatch(item('2'))).toEqual([]);
     });
   });
 

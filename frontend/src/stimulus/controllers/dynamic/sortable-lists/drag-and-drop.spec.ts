@@ -525,7 +525,7 @@ describe('sortable lists drag and drop helpers', () => {
           type: 'work_package',
           itemId: '1',
           sourceListElement: sourceList,
-          confined: true,
+          permittedListElements: [sourceList],
         }),
       });
 
@@ -547,7 +547,7 @@ describe('sortable lists drag and drop helpers', () => {
           type: 'work_package',
           itemId: '1',
           sourceListElement: list,
-          confined: true,
+          permittedListElements: [list],
         }),
       });
 

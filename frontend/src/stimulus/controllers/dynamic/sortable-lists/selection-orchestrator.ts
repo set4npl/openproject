@@ -88,7 +88,7 @@ export class SelectionOrchestrator {
 
   // Resolved without freezing or collapsing anything: it runs while the drag
   // payload is built, before beginDragBatch freezes the batch.
-  prospectiveDragMates(itemElement:HTMLElement):SelectionItem[] {
+  prospectiveDragBatch(itemElement:HTMLElement):SelectionItem[] {
     const candidate = resolveCandidate(this.host.rootElement, itemElement);
     if (!candidate?.orderable) {
       return [];

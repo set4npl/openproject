@@ -41,7 +41,7 @@ import { Controller, type ActionEvent } from '@hotwired/stimulus';
 import type { ActionMenuElement } from '@openproject/primer-view-components/app/components/primer/alpha/action_menu/action_menu_element';
 import { closestDragBlockingElement } from 'core-stimulus/helpers/interactive-element-helper';
 import {
-  confinementAllowsDrop,
+  permittedListsAllowDrop,
   isItemFromRoot,
   sortableItemData,
   type RootAwareChild,
@@ -49,9 +49,9 @@ import {
   type SortableListsRoot,
 } from './drag-and-drop';
 import {
-  isConfinedItem,
   isMoveDirection,
   isOrderableItem,
+  itemMobility,
   sortableItemSelector,
   type DestinationIdentity,
 } from './list-dom';
@@ -430,7 +430,7 @@ export default class ItemController extends Controller<HTMLElement> implements R
         return isItemFromRoot(root.element, source.data)
           && source.data.itemId !== this.idValue
           && source.data.type === this.typeValue
-          && confinementAllowsDrop(source.data, this.element);
+          && permittedListsAllowDrop(source.data, this.element);
       },
       getData: ({ input }) => {
         return attachClosestEdge(this.getItemData(), {
@@ -517,8 +517,10 @@ export default class ItemController extends Controller<HTMLElement> implements R
       rootElement: this.root?.element ?? null,
       sourceListElement: this.root?.ownerListElementOf(this.element) ?? null,
       // A rootless item can carry no batch, so its own mobility is the
-      // whole answer.
-      confined: this.root?.dragConfined(this.element) ?? isConfinedItem(this.element),
+      // whole answer, and it can name no list either: anything short of free
+      // movement leaves it accepting nothing.
+      permittedListElements: this.root?.dragPermittedLists(this.element)
+        ?? (itemMobility(this.element) === 'free' ? null : []),
     });
   }
 

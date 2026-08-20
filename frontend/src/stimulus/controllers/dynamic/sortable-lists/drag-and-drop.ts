@@ -70,11 +70,9 @@ export interface SortableItemData extends Record<string|symbol, unknown> {
   // registered list. Mirrors the rootElement pattern: identity is carried on
   // the payload so drop targets can decide without walking the DOM.
   sourceListElement:HTMLElement|null;
-  // A confined item may only land in sourceListElement or one of its rows;
-  // every other container refuses it. See confinementAllowsDrop. Batch-aware:
-  // a free item dragging confined batch-mates is itself confined, since the
-  // whole batch either lands together or not at all.
-  confined:boolean;
+  // The lists this drag may land in, resolved across the whole batch at drag
+  // start; null when nothing restricts it, empty when nothing accepts it.
+  permittedListElements:HTMLElement[]|null;
 }
 
 export type SortableListDropPosition = 'start'|'end';
@@ -125,7 +123,7 @@ export interface SortableListsRoot {
   // Asked while the drag payload is built, which Pragmatic dispatches before
   // beginDragBatch freezes the batch, so the answer comes from the live
   // selection in the same synchronous dragstart turn.
-  dragConfined(itemElement:HTMLElement):boolean;
+  dragPermittedLists(itemElement:HTMLElement):HTMLElement[]|null;
 }
 
 // Implemented by the list, item and scrollable controllers so the root can
@@ -158,13 +156,13 @@ export function sortableItemData({
   itemId,
   rootElement = null,
   sourceListElement = null,
-  confined = false,
+  permittedListElements = null,
 }:{
   type:string;
   itemId:string;
   rootElement?:HTMLElement|null;
   sourceListElement?:HTMLElement|null;
-  confined?:boolean;
+  permittedListElements?:HTMLElement[]|null;
 }):SortableItemData {
   return {
     [sortableItemDataKey]: true,
@@ -172,7 +170,7 @@ export function sortableItemData({
     itemId,
     rootElement,
     sourceListElement,
-    confined,
+    permittedListElements,
   };
 }
 
@@ -232,10 +230,10 @@ export function isItemFromRoot(
     && data.rootElement === rootElement;
 }
 
-// Whether a drop on the given target may amount to a move under the source's
-// confinement. contains() includes the element itself, so one predicate passes
-// both the source list element and every row inside it while failing every
-// foreign container. The source list passing is load-bearing: a drop resolves
+// Whether a drop on the given target may amount to a move for this batch.
+// contains() includes the element itself, so one predicate passes both a
+// permitted list element and every row inside it while failing every other
+// container. A permitted list passing is load-bearing: a drop resolves
 // through the list target (resolveDropIntent returns null without one), so
 // failing it would kill within-list reorder, not just cross-list moves.
 //
@@ -246,11 +244,12 @@ export function isItemFromRoot(
 // release over a container this fails for resolves to no move at all, and
 // the drop-indicator layers consult it too — rows never show a drop position
 // for it, and the list marks its container refused instead of active.
-export function confinementAllowsDrop(
+export function permittedListsAllowDrop(
   data:SortableItemData,
   targetElement:Element,
 ):boolean {
-  return !data.confined || (data.sourceListElement?.contains(targetElement) ?? false);
+  return data.permittedListElements === null
+    || data.permittedListElements.some((list) => list.contains(targetElement));
 }
 
 export function resolvePreviousSortableItemId({
@@ -333,13 +332,13 @@ export function resolveDropIntent({
   const targetItem = location.current.dropTargets.find(
     (target):target is typeof target & { data:SortableItemData; element:HTMLElement } => (
       isSortableItemData(target.data) && target.element instanceof HTMLElement && root.contains(target.element)
-        && confinementAllowsDrop(sourceData, target.element)
+        && permittedListsAllowDrop(sourceData, target.element)
     ),
   );
   const targetList = location.current.dropTargets.find(
     (target):target is typeof target & { data:SortableListData; element:HTMLElement } => (
       isSortableListData(target.data) && target.element instanceof HTMLElement && root.contains(target.element)
-        && confinementAllowsDrop(sourceData, target.element)
+        && permittedListsAllowDrop(sourceData, target.element)
     ),
   );
   if (!targetList) {

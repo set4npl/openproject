@@ -115,8 +115,10 @@ describe('Sortable lists item controller', () => {
       activeDragBatchCount: vi.fn(() => 0),
       // Mirrors the real root's fallback for a batchless drag: the item's own
       // mobility attribute is the whole answer.
-      dragConfined: vi.fn((itemElement:HTMLElement) => (
+      dragPermittedLists: vi.fn((itemElement:HTMLElement) => (
         itemElement.getAttribute('data-sortable-lists--item-mobility-value') === 'confined'
+          ? [ownerListElement].filter((list):list is HTMLElement => list !== null)
+          : null
       )),
     };
   }
@@ -499,11 +501,11 @@ describe('Sortable lists item controller', () => {
     })).toBe(true);
   });
 
-  // A confined item may only land in its source list. Rows of that list keep
-  // accepting it (within-list reorder), rows of any other list refuse it, and
-  // with no payload list there is nothing it may land on.
-  describe('a confined drag source', () => {
-    function canDropOnto(targetElement:HTMLElement, root:HTMLElement, sourceListElement:HTMLElement|null) {
+  // A pinned drag may only land in the lists its payload permits. Rows of one
+  // keep accepting it (within-list reorder), rows of any other refuse it, and
+  // an empty set leaves nothing it may land on.
+  describe('a pinned drag source', () => {
+    function canDropOnto(targetElement:HTMLElement, root:HTMLElement, permittedList:HTMLElement|null) {
       return vi.mocked(dropTargetForElements).mock.lastCall?.[0].canDrop?.({
         element: targetElement,
         input: {} as never,
@@ -512,8 +514,7 @@ describe('Sortable lists item controller', () => {
             type: 'item',
             itemId: '456',
             rootElement: root,
-            sourceListElement,
-            confined: true,
+            permittedListElements: permittedList ? [permittedList] : [],
           }),
           element: document.createElement('article'),
         } as never,
@@ -528,7 +529,7 @@ describe('Sortable lists item controller', () => {
       expect(draggable).toHaveBeenCalledWith(expect.objectContaining({ element }));
     });
 
-    it('is accepted by a row inside its source list', () => {
+    it('is accepted by a row inside a permitted list', () => {
       const root = document.createElement('div');
       const sourceList = document.createElement('div');
       const targetElement = document.createElement('article');
@@ -539,7 +540,7 @@ describe('Sortable lists item controller', () => {
       expect(canDropOnto(targetElement, root, sourceList)).toBe(true);
     });
 
-    it('is refused by a row of a foreign list', () => {
+    it('is refused by a row outside every permitted list', () => {
       const root = document.createElement('div');
       const sourceList = document.createElement('div');
       const targetElement = document.createElement('article');
@@ -549,7 +550,7 @@ describe('Sortable lists item controller', () => {
       expect(canDropOnto(targetElement, root, sourceList)).toBe(false);
     });
 
-    it('is refused everywhere when its payload carries no source list', () => {
+    it('is refused everywhere when its payload permits no list', () => {
       const root = document.createElement('div');
       const targetElement = document.createElement('article');
 
@@ -759,7 +760,7 @@ describe('Sortable lists item controller', () => {
       .toEqual(expect.objectContaining({ itemId: '123', type: 'item', rootElement: root }));
   });
 
-  it('includes the root-resolved source list and confinement in the drag payload', () => {
+  it('includes the root-resolved source list and permitted lists in the payload', () => {
     const root = document.createElement('div');
     const sourceList = document.createElement('div');
     const element = document.createElement('article');
@@ -769,29 +770,33 @@ describe('Sortable lists item controller', () => {
     });
 
     expect(vi.mocked(draggable).mock.lastCall?.[0].getInitialData?.(draggableArgs(element)))
-      .toEqual(expect.objectContaining({ sourceListElement: sourceList, confined: true }));
+      .toEqual(expect.objectContaining({ sourceListElement: sourceList, permittedListElements: [sourceList] }));
   });
 
-  it('defaults the payload to unconfined with no source list', () => {
+  // Rootless, so the item's own mobility is the whole answer: free accepts
+  // every list, and a confined one cannot name the list it sits in.
+  it('permits every list for a rootless free item', () => {
     const element = document.createElement('article');
     connectedControllerFor(element);
 
     expect(vi.mocked(draggable).mock.lastCall?.[0].getInitialData?.(draggableArgs(element)))
-      .toEqual(expect.objectContaining({ sourceListElement: null, confined: false }));
+      .toEqual(expect.objectContaining({ sourceListElement: null, permittedListElements: null }));
   });
 
-  // Confinement is the root's batch-aware answer, not the item's own
-  // mobility: a free card dragging a confined batch-mate is itself confined.
-  it('carries the batch-aware confinement of the root in the payload', () => {
+  // The permitted lists are the root's batch-aware answer, not the item's own
+  // mobility: a free card dragging a confined batch-mate is pinned to the
+  // mate's list, which need not be its own.
+  it('carries the batch-aware permitted lists of the root in the payload', () => {
     const root = document.createElement('div');
     const element = document.createElement('article');
+    const mateList = document.createElement('ul');
     connectedControllerFor(element, {
-      root: { ...fakeRoot(root), dragConfined: vi.fn(() => true) },
+      root: { ...fakeRoot(root), dragPermittedLists: vi.fn(() => [mateList]) },
       mobility: 'free',
     });
 
     expect(vi.mocked(draggable).mock.lastCall?.[0].getInitialData?.(draggableArgs(element)))
-      .toEqual(expect.objectContaining({ confined: true }));
+      .toEqual(expect.objectContaining({ permittedListElements: [mateList] }));
   });
 
   describe('Stimulus application wiring', () => {
@@ -1003,7 +1008,7 @@ describe('Sortable lists item controller', () => {
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch: vi.fn(),
         activeDragBatchCount: vi.fn(() => 3),
-        dragConfined: vi.fn(() => false),
+        dragPermittedLists: vi.fn(() => null),
       });
 
       vi.mocked(draggable).mock.lastCall?.[0].onGenerateDragPreview?.({
@@ -1098,7 +1103,7 @@ describe('Sortable lists item controller', () => {
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch: vi.fn(),
         activeDragBatchCount: vi.fn(() => 3),
-        dragConfined: vi.fn(() => false),
+        dragPermittedLists: vi.fn(() => null),
       });
 
       vi.mocked(draggable).mock.lastCall?.[0].onGenerateDragPreview?.({
@@ -2395,7 +2400,7 @@ describe('Sortable lists item controller', () => {
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch,
         activeDragBatchCount: vi.fn(() => 0),
-        dragConfined: vi.fn(() => false),
+        dragPermittedLists: vi.fn(() => null),
       };
 
       controller.connectRoot(root);
@@ -2425,7 +2430,7 @@ describe('Sortable lists item controller', () => {
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch,
         activeDragBatchCount: vi.fn(() => 0),
-        dragConfined: vi.fn(() => false),
+        dragPermittedLists: vi.fn(() => null),
       };
 
       controller.connectRoot(root);
