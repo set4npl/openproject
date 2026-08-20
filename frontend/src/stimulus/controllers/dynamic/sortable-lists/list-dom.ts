@@ -127,6 +127,25 @@ export function sameDestination(left:DestinationIdentity|null, right:Destination
   return left?.type === right.type && left.id === right.id;
 }
 
+/**
+ * Whether the item may enter the destination. The one policy behind both
+ * surfaces offering a move, so the menus and a drag cannot drift apart.
+ */
+export function itemAcceptsDestination(
+  item:HTMLElement,
+  target:DestinationIdentity,
+  ownerDestinationOf:(item:HTMLElement) => DestinationIdentity|null,
+):boolean {
+  switch (itemMobility(item)) {
+    case 'fixed':
+      return false;
+    case 'confined':
+      return sameDestination(ownerDestinationOf(item), target);
+    default:
+      return true;
+  }
+}
+
 export function permittedDestinations({
   items,
   candidates,
@@ -136,12 +155,12 @@ export function permittedDestinations({
   candidates:DestinationIdentity[];
   ownerDestinationOf:(item:HTMLElement) => DestinationIdentity|null;
 }):DestinationIdentity[] {
-  if (items.length === 0 || items.some((item) => itemMobility(item) === 'fixed')) {
+  if (items.length === 0) {
     return [];
   }
 
   return candidates.filter((target) => (
-    items.every((item) => itemMobility(item) === 'free' || sameDestination(ownerDestinationOf(item), target))
+    items.every((item) => itemAcceptsDestination(item, target, ownerDestinationOf))
   ));
 }
 

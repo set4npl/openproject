@@ -31,6 +31,7 @@ import {
   isConfinedItem,
   isOrderableItem,
   itemMobility,
+  itemAcceptsDestination,
   permittedDestinations,
   reorderRows,
   resolveBlockMove,
@@ -430,6 +431,16 @@ describe('destination intersection', () => {
     element.setAttribute(sortableItemMobilityAttribute, mobility);
     return element;
   }
+
+  it('answers for one item which destinations it accepts', () => {
+    const confinedInSprint = item('confined');
+    const ownerDestinationOf = () => sprint1;
+
+    expect(itemAcceptsDestination(item(), sprint2, ownerDestinationOf)).toBe(true);
+    expect(itemAcceptsDestination(item('fixed'), sprint1, ownerDestinationOf)).toBe(false);
+    expect(itemAcceptsDestination(confinedInSprint, sprint1, ownerDestinationOf)).toBe(true);
+    expect(itemAcceptsDestination(confinedInSprint, sprint2, ownerDestinationOf)).toBe(false);
+  });
 
   it('permits every candidate for free-only members', () => {
     const freeOne = item();
