@@ -524,7 +524,6 @@ describe('sortable lists drag and drop helpers', () => {
         sourceData: sortableItemData({
           type: 'work_package',
           itemId: '1',
-          sourceListElement: sourceList,
           permittedListElements: [sourceList],
         }),
       });
@@ -546,7 +545,6 @@ describe('sortable lists drag and drop helpers', () => {
         sourceData: sortableItemData({
           type: 'work_package',
           itemId: '1',
-          sourceListElement: list,
           permittedListElements: [list],
         }),
       });

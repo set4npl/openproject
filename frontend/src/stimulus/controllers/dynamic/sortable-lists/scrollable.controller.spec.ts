@@ -77,7 +77,6 @@ describe('Sortable lists scrollable controller', () => {
       moveToDestination: vi.fn(),
       moveInDirection: vi.fn(),
       moveAvailability: vi.fn(() => null),
-      ownerListElementOf: vi.fn(() => null),
       ownerRowsContainer: vi.fn(() => null),
       beginDragBatch: vi.fn(),
       activeDragBatchCount: vi.fn(() => 0),

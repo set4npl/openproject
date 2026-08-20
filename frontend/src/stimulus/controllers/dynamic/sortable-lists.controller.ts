@@ -597,12 +597,6 @@ export default class SortableListsController extends Controller<HTMLElement> imp
     });
   }
 
-  // The list element an item currently belongs to, for the confinement field
-  // on the drag payload; null outside any registered list.
-  ownerListElementOf(itemElement:HTMLElement):HTMLElement|null {
-    return this.ownerListOf(itemElement)?.element ?? null;
-  }
-
   // The owning list of an item is the innermost list outlet containing its
   // element: in nested topologies (a section item hosting a field list) the
   // item is contained by every ancestor list, and only the innermost one

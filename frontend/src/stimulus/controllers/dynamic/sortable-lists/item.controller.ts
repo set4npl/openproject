@@ -515,7 +515,6 @@ export default class ItemController extends Controller<HTMLElement> implements R
       itemId: this.idValue,
       type: this.typeValue,
       rootElement: this.root?.element ?? null,
-      sourceListElement: this.root?.ownerListElementOf(this.element) ?? null,
       // A rootless item can carry no batch, so its own mobility is the
       // whole answer, and it can name no list either: anything short of free
       // movement leaves it accepting nothing.

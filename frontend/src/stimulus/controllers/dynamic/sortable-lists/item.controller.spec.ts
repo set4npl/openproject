@@ -109,7 +109,6 @@ describe('Sortable lists item controller', () => {
       moveToDestination: vi.fn(),
       moveInDirection: vi.fn(),
       moveAvailability: vi.fn(() => null),
-      ownerListElementOf: vi.fn(() => ownerListElement),
       ownerRowsContainer: vi.fn(ownerRowsContainer),
       beginDragBatch: vi.fn(),
       activeDragBatchCount: vi.fn(() => 0),
@@ -560,9 +559,8 @@ describe('Sortable lists item controller', () => {
     });
   });
 
-  it('accepts an unconfined drop from a row of another list', () => {
+  it('accepts an unrestricted drop from a row of another list', () => {
     const root = document.createElement('div');
-    const foreignList = document.createElement('div');
     const targetElement = document.createElement('article');
 
     connectedControllerFor(targetElement, { root: fakeRoot(root) });
@@ -575,7 +573,6 @@ describe('Sortable lists item controller', () => {
           type: 'item',
           itemId: '456',
           rootElement: root,
-          sourceListElement: foreignList,
         }),
         element: document.createElement('article'),
       } as never,
@@ -760,7 +757,7 @@ describe('Sortable lists item controller', () => {
       .toEqual(expect.objectContaining({ itemId: '123', type: 'item', rootElement: root }));
   });
 
-  it('includes the root-resolved source list and permitted lists in the payload', () => {
+  it('includes the root-resolved permitted lists in the payload', () => {
     const root = document.createElement('div');
     const sourceList = document.createElement('div');
     const element = document.createElement('article');
@@ -770,7 +767,7 @@ describe('Sortable lists item controller', () => {
     });
 
     expect(vi.mocked(draggable).mock.lastCall?.[0].getInitialData?.(draggableArgs(element)))
-      .toEqual(expect.objectContaining({ sourceListElement: sourceList, permittedListElements: [sourceList] }));
+      .toEqual(expect.objectContaining({ permittedListElements: [sourceList] }));
   });
 
   // Rootless, so the item's own mobility is the whole answer: free accepts
@@ -780,7 +777,7 @@ describe('Sortable lists item controller', () => {
     connectedControllerFor(element);
 
     expect(vi.mocked(draggable).mock.lastCall?.[0].getInitialData?.(draggableArgs(element)))
-      .toEqual(expect.objectContaining({ sourceListElement: null, permittedListElements: null }));
+      .toEqual(expect.objectContaining({ permittedListElements: null }));
   });
 
   // The permitted lists are the root's batch-aware answer, not the item's own
@@ -1004,7 +1001,6 @@ describe('Sortable lists item controller', () => {
         moveToDestination: vi.fn(),
         moveInDirection: vi.fn(),
         moveAvailability: vi.fn(() => null),
-        ownerListElementOf: vi.fn(() => null),
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch: vi.fn(),
         activeDragBatchCount: vi.fn(() => 3),
@@ -1099,7 +1095,6 @@ describe('Sortable lists item controller', () => {
         moveToDestination: vi.fn(),
         moveInDirection: vi.fn(),
         moveAvailability: vi.fn(() => null),
-        ownerListElementOf: vi.fn(() => null),
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch: vi.fn(),
         activeDragBatchCount: vi.fn(() => 3),
@@ -2396,7 +2391,6 @@ describe('Sortable lists item controller', () => {
         moveToDestination: vi.fn(),
         moveInDirection: vi.fn(),
         moveAvailability: vi.fn(() => null),
-        ownerListElementOf: vi.fn(() => null),
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch,
         activeDragBatchCount: vi.fn(() => 0),
@@ -2426,7 +2420,6 @@ describe('Sortable lists item controller', () => {
         moveToDestination: vi.fn(),
         moveInDirection: vi.fn(),
         moveAvailability: vi.fn(() => null),
-        ownerListElementOf: vi.fn(() => null),
         ownerRowsContainer: vi.fn(() => null),
         beginDragBatch,
         activeDragBatchCount: vi.fn(() => 0),

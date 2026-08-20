@@ -65,11 +65,6 @@ export interface SortableItemData extends Record<string|symbol, unknown> {
   type:string;
   itemId:string;
   rootElement:HTMLElement|null;
-  // The list element the drag started in, resolved by the root at drag start
-  // (items hold no list reference themselves). Null when the item is not in a
-  // registered list. Mirrors the rootElement pattern: identity is carried on
-  // the payload so drop targets can decide without walking the DOM.
-  sourceListElement:HTMLElement|null;
   // The lists this drag may land in, resolved across the whole batch at drag
   // start; null when nothing restricts it, empty when nothing accepts it.
   permittedListElements:HTMLElement[]|null;
@@ -108,9 +103,6 @@ export interface SortableListsRoot {
   // A snapshot for menu gating over the invoker's prospective action scope;
   // the click path re-resolves against the live DOM.
   moveAvailability(itemElement:HTMLElement):MoveAvailability|null;
-  // The element of the list an item currently belongs to; null outside any
-  // registered list. Items carry no list reference, so the root resolves it.
-  ownerListElementOf(itemElement:HTMLElement):HTMLElement|null;
   // The rows container of the item's innermost owning list, or null when the
   // item is not (yet) inside a list the root knows about.
   ownerRowsContainer(itemElement:HTMLElement):HTMLElement|null;
@@ -155,13 +147,11 @@ export function sortableItemData({
   type,
   itemId,
   rootElement = null,
-  sourceListElement = null,
   permittedListElements = null,
 }:{
   type:string;
   itemId:string;
   rootElement?:HTMLElement|null;
-  sourceListElement?:HTMLElement|null;
   permittedListElements?:HTMLElement[]|null;
 }):SortableItemData {
   return {
@@ -169,7 +159,6 @@ export function sortableItemData({
     type,
     itemId,
     rootElement,
-    sourceListElement,
     permittedListElements,
   };
 }

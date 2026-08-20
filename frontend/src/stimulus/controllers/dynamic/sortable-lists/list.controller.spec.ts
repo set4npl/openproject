@@ -81,7 +81,6 @@ describe('Sortable lists list controller', () => {
       moveToDestination: vi.fn(),
       moveInDirection: vi.fn(),
       moveAvailability: vi.fn(() => null),
-      ownerListElementOf: vi.fn(() => null),
       ownerRowsContainer: vi.fn(() => null),
       beginDragBatch: vi.fn(),
       activeDragBatchCount: vi.fn(() => 0),
@@ -127,13 +126,10 @@ describe('Sortable lists list controller', () => {
   function source(
     rootElement:HTMLElement|null,
     type = 'work_package',
-    { permittedListElements = null, sourceListElement = null }:{
-      permittedListElements?:HTMLElement[]|null;
-      sourceListElement?:HTMLElement|null;
-    } = {},
+    { permittedListElements = null }:{ permittedListElements?:HTMLElement[]|null } = {},
   ) {
     return {
-      data: sortableItemData({ itemId: '1', type, rootElement, permittedListElements, sourceListElement }),
+      data: sortableItemData({ itemId: '1', type, rootElement, permittedListElements }),
       element: document.createElement('li'),
     } as never;
   }
