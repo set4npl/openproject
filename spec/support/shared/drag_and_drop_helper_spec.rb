@@ -68,14 +68,18 @@ end
 # once the native drag loop starts, Chrome swallows input from later action
 # chains, so multi-`perform` sequences never deliver the drop. Coordinates are
 # viewport-absolute; callers pick the exact drop point (edge targeting).
-def perform_native_drag(source:, target_x:, target_y:)
+# `dwell` adds a second pointer move over the target before releasing. One
+# move produces a single dragover, and a drag engine that paints its drop
+# feedback on an animation frame has not painted by then; a caller asserting
+# that feedback needs the extra event.
+def perform_native_drag(source:, target_x:, target_y:, dwell: false)
   scroll_to_element(source)
 
   rect = source.native.rect
   source_x = (rect.x + (rect.width / 2)).to_i
   source_y = (rect.y + (rect.height / 2)).to_i
 
-  page
+  action = page
     .driver
     .browser
     .action
@@ -84,8 +88,10 @@ def perform_native_drag(source:, target_x:, target_y:)
     .pause(duration: 0.1)
     .move_by(target_x.to_i - source_x, target_y.to_i - source_y)
     .pause(duration: 0.1)
-    .release
-    .perform
+
+  action = action.move_by(0, 1).pause(duration: 0.1) if dwell
+
+  action.release.perform
 end
 
 def drag_by_pixel(element:, by_x:, by_y:)
