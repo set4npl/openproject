@@ -770,6 +770,18 @@ describe('Sortable lists item controller', () => {
       .toEqual(expect.objectContaining({ permittedListElements: [sourceList] }));
   });
 
+  it('preserves an unrestricted permitted-lists answer from the root', () => {
+    const root = document.createElement('div');
+    const element = document.createElement('article');
+    connectedControllerFor(element, {
+      root: { ...fakeRoot(root), dragPermittedLists: vi.fn(() => null) },
+      mobility: 'confined',
+    });
+
+    expect(vi.mocked(draggable).mock.lastCall?.[0].getInitialData?.(draggableArgs(element)))
+      .toEqual(expect.objectContaining({ permittedListElements: null }));
+  });
+
   // Rootless, so the item's own mobility is the whole answer: free accepts
   // every list, and a confined one cannot name the list it sits in.
   it('permits every list for a rootless free item', () => {

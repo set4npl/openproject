@@ -518,8 +518,9 @@ export default class ItemController extends Controller<HTMLElement> implements R
       // A rootless item can carry no batch, so its own mobility is the
       // whole answer, and it can name no list either: anything short of free
       // movement leaves it accepting nothing.
-      permittedListElements: this.root?.dragPermittedLists(this.element)
-        ?? (itemMobility(this.element) === 'free' ? null : []),
+      permittedListElements: this.root
+        ? this.root.dragPermittedLists(this.element)
+        : (itemMobility(this.element) === 'free' ? null : []),
     });
   }
 
