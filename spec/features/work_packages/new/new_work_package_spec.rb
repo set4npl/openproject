@@ -144,7 +144,7 @@ RSpec.describe "new work package", :js do
         description_field.set_value description
 
         save_work_package!
-        expect(page).to have_css(".op-work-package-tabs")
+        expect(page).to have_test_selector("wp-details-tab-component--tabs")
 
         subject_field.expect_state_text(subject)
         description_field = wp_page.edit_field :description
@@ -218,7 +218,7 @@ RSpec.describe "new work package", :js do
 
   context "project split screen" do
     let(:safeguard_selector) { ".work-packages--details-content.-create-mode" }
-    let(:wp_page) { Pages::SplitWorkPackage.new(WorkPackage.new) }
+    let(:wp_page) { Pages::PrimerizedSplitWorkPackage.new(WorkPackage.new) }
     let(:wp_table) { Pages::WorkPackagesTable.new(project) }
 
     before do
@@ -316,7 +316,7 @@ RSpec.describe "new work package", :js do
 
   context "global split screen" do
     let(:safeguard_selector) { ".work-packages--details-content.-create-mode" }
-    let(:wp_page) { Pages::SplitWorkPackage.new(WorkPackage.new) }
+    let(:wp_page) { Pages::PrimerizedSplitWorkPackage.new(WorkPackage.new) }
     let(:wp_table) { Pages::WorkPackagesTable.new(nil) }
 
     before do
