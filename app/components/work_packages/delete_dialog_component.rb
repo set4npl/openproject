@@ -50,38 +50,29 @@ module WorkPackages
     def deletion_roots = [work_package]
 
     def title
-      t_dialog("title")
+      t_dialog(has_descendants? ? "descendants_choice.heading" : "title")
     end
 
     def heading
-      t_dialog("heading")
+      t_dialog(has_descendants? ? "descendants_choice.heading" : "heading")
     end
 
     def description
+      return t_dialog("descendants_choice.question") if has_descendants?
+
       t_dialog("description", name: work_package.to_s)
     end
 
-    # Only the deleted descendants are listed, so only those can be confirmed.
     def confirmation_checkbox_text
-      t_dialog(deleted_descendants.any? ? "confirm_descendants_deletion" : "confirm_deletion")
-    end
-
-    def cross_project_descendants?
-      deleted_descendants.any? { |d| d.project != work_package.project }
-    end
-
-    def all_project_links
-      projects = deleted_descendants
-        .filter_map(&:project)
-        .uniq
-        .reject { |p| p == work_package.project }
-        .unshift(work_package.project)
-
-      link_to_projects(projects)
+      t_dialog("confirm_deletion")
     end
 
     def form_action
       helpers.work_packages_bulk_path(ids: [work_package.id], back_url: @back_url)
+    end
+
+    def confirm_delete_path
+      helpers.confirm_delete_work_packages_bulk_path(ids: [work_package.id], back_url: @back_url)
     end
   end
 end

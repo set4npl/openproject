@@ -57,6 +57,7 @@ See COPYRIGHT and LICENSE files for more details.
 
     render_inline_form(f) do |form|
       form.hidden(name: "back_url", value: back_url, scope_name_to_model: false) if back_url
+      form.hidden(name: "delete_descendants", value: params[:delete_descendants], scope_name_to_model: false)
 
       work_packages.each do |wp|
         form.hidden(name: "ids[]", value: wp.id, scope_name_to_model: false)

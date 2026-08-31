@@ -49,6 +49,37 @@ module WorkPackages
         User.current
       end
 
+      # Lets the user delete only the roots (detaching descendants) or the whole
+      # hierarchy. The "delete descendants" branch reveals the OP-19734 warnings,
+      # which are the contextual dialog for hidden or undeletable descendants.
+      def render_descendants_choice
+        render(Primer::Alpha::RadioButtonGroup.new(
+                 name: "delete_descendants",
+                 label: t_dialog("descendants_choice.heading"),
+                 visually_hide_label: true,
+                 mb: 3
+               )) do |group|
+          group.radio_button(value: "false",
+                             label: t_dialog("descendants_choice.self_only_label"),
+                             caption: t_dialog("descendants_choice.self_only_caption"),
+                             data: descendants_choice_cause_data)
+          group.radio_button(value: "true",
+                             checked: true,
+                             label: t_dialog("descendants_choice.with_descendants_label"),
+                             caption: t_dialog("descendants_choice.with_descendants_caption"),
+                             data: descendants_choice_cause_data)
+        end
+      end
+
+      def descendants_choice_cause_data
+        { show_when_value_selected_target: "cause", target_name: "delete_descendants" }
+      end
+
+      # Shows the tagged element only while the given radio value is selected.
+      def descendants_choice_effect_data(value)
+        { show_when_value_selected_target: "effect", target_name: "delete_descendants", value: value.to_s }
+      end
+
       def variant
         @variant ||=
           if !has_descendants? then :none

@@ -58,6 +58,12 @@ module WorkPackages
           unlinked_descendants.select { |descendant| visible_descendant_ids.include?(descendant.id) }
       end
 
+      # When false, every descendant is detached instead of deleted, so the user only
+      # removes the roots. Overridden by the DeleteService from the user's dialog choice.
+      def delete_descendants?
+        true
+      end
+
       def hidden_unlinked_count
         unlinked_descendants.size - visible_unlinked_descendants.size
       end
@@ -67,7 +73,7 @@ module WorkPackages
       # Unlinking a survivor is a side effect of the deletion, so this deliberately does not
       # consider the "manage_subtasks" permission.
       def deleted_with_roots?(descendant)
-        visible_descendant_ids.include?(descendant.id) && deletable?(descendant)
+        delete_descendants? && visible_descendant_ids.include?(descendant.id) && deletable?(descendant)
       end
 
       def deletable?(descendant)

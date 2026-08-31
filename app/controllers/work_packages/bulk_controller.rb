@@ -52,6 +52,15 @@ class WorkPackages::BulkController < ApplicationController
     respond_with_dialog component
   end
 
+  # Second step of the delete flow: the user chose to delete descendants and some are
+  # hidden or undeletable. Swap the choice dialog for the danger confirmation.
+  def confirm_delete
+    close_dialog_via_turbo_stream("wp-delete-dialog")
+    dialog_via_turbo_stream(component: delete_descendants_dialog_component)
+
+    respond_with_turbo_streams
+  end
+
   def edit
     setup_edit
   end
@@ -85,7 +94,10 @@ class WorkPackages::BulkController < ApplicationController
 
   def destroy # rubocop:disable Metrics/AbcSize
     unless WorkPackage.cleanup_associated_before_destructing_if_required(@work_packages, current_user, params[:to_do])
-      return redirect_to(action: :reassign, ids: @work_packages.map(&:id), back_url: params[:back_url])
+      return redirect_to(action: :reassign,
+                         ids: @work_packages.map(&:id),
+                         delete_descendants: delete_descendants?,
+                         back_url: params[:back_url])
     end
 
     calls = destroy_work_packages(@work_packages)
@@ -109,6 +121,14 @@ class WorkPackages::BulkController < ApplicationController
   end
 
   private
+
+  def delete_descendants_dialog_component
+    if @work_packages.one?
+      WorkPackages::DeleteDescendantsDialogComponent.new(work_package: @work_packages.first, back_url: params[:back_url])
+    else
+      WorkPackages::BulkDeleteDescendantsDialogComponent.new(work_packages: @work_packages, back_url: params[:back_url])
+    end
+  end
 
   def setup_edit
     @available_statuses = @projects.map { |p| Workflow.available_statuses(p) }.inject(&:&)
@@ -138,12 +158,20 @@ class WorkPackages::BulkController < ApplicationController
       WorkPackages::DeleteService
         .new(user: current_user,
              model: work_package.reload)
-        .call
+        .call(delete_descendants: delete_descendants?)
     rescue ::ActiveRecord::RecordNotFound
       # raised by #reload if work package no longer exists
       # nothing to do, work package was already deleted (eg. by a parent)
       nil
     end
+  end
+
+  # Defaults to deleting descendants when the choice is absent, preserving the
+  # historical cascade for callers that never open the dialog.
+  def delete_descendants?
+    return true unless params.key?(:delete_descendants)
+
+    ActiveModel::Type::Boolean.new.cast(params[:delete_descendants])
   end
 
   # A call also carries the descendants it deleted, next to work packages it only

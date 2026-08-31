@@ -38,6 +38,8 @@ class WorkPackages::DeleteService < BaseServices::Delete
 
   def deletion_user = user
 
+  def delete_descendants? = params.fetch(:delete_descendants, true)
+
   def deletable?(descendant)
     validate(descendant, user, options: contract_options).first
   end
