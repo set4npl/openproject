@@ -44,8 +44,7 @@ module Bim
       menu_item :ifc_models
 
       def index
-        @ifc_models = @ifc_models
-                          .includes(:project, :uploader)
+        @ifc_models = @ifc_models.includes(:project, :uploader)
       end
 
       def show
@@ -65,15 +64,18 @@ module Bim
         frontend_redirect @ifc_models.defaults.pluck(:id).uniq
       end
 
-      def set_direct_upload_file_name # rubocop:disable Metrics/AbcSize
-        if params[:filesize].to_i > Setting.attachment_max_size.to_i.kilobytes
-          render json: { error: I18n.t("activerecord.errors.messages.file_too_large",
-                                       count: Setting.attachment_max_size.to_i.kilobytes) },
+      def set_direct_upload_file_name
+        max_size = Setting.attachment_max_size.to_i.kilobytes
+        if params[:filesize].to_i > max_size
+          render json: { error: I18n.t("activerecord.errors.messages.file_too_large", count: max_size) },
                  status: :unprocessable_entity
           return
         end
 
         session[:pending_ifc_model_title] = params[:title]
+      end
+
+      def set_direct_upload_default_value
         session[:pending_ifc_model_is_default] = params[:isDefault]
       end
 
@@ -94,7 +96,7 @@ module Bim
           title: session[:pending_ifc_model_title],
           project: @project,
           ifc_attachment: attachment,
-          is_default: session[:pending_ifc_model_is_default]
+          is_default: session[:pending_ifc_model_is_default] || false
         }
 
         new_model = true
@@ -103,12 +105,12 @@ module Bim
           new_model = false
 
           service_result = ::Bim::IfcModels::UpdateService
-                               .new(user: current_user, model: ifc_model)
-                               .call(params.with_indifferent_access)
+                             .new(user: current_user, model: ifc_model)
+                             .call(params.with_indifferent_access)
         else
           service_result = ::Bim::IfcModels::CreateService
-                               .new(user: current_user)
-                               .call(params.with_indifferent_access)
+                             .new(user: current_user)
+                             .call(params.with_indifferent_access)
 
         end
         @ifc_model = service_result.result
@@ -137,12 +139,12 @@ module Bim
 
       def create
         combined_params = permitted_model_params
-                              .to_h
-                              .reverse_merge(project: @project)
+                            .to_h
+                            .reverse_merge(project: @project)
 
         service_result = ::Bim::IfcModels::CreateService
-                             .new(user: current_user)
-                             .call(combined_params)
+                           .new(user: current_user)
+                           .call(combined_params)
 
         @ifc_model = service_result.result
 
@@ -156,12 +158,12 @@ module Bim
 
       def update
         combined_params = permitted_model_params
-                              .to_h
-                              .reverse_merge(project: @project)
+                            .to_h
+                            .reverse_merge(project: @project)
 
         service_result = ::Bim::IfcModels::UpdateService
-                             .new(user: current_user, model: @ifc_model)
-                             .call(combined_params)
+                           .new(user: current_user, model: @ifc_model)
+                           .call(combined_params)
 
         @ifc_model = service_result.result
 
@@ -206,16 +208,14 @@ module Bim
       end
 
       def find_all_ifc_models
-        @ifc_models = @project
-                          .ifc_models
-                          .includes(:attachments)
-                          .order("#{IfcModels::IfcModel.table_name}.created_at ASC")
+        @ifc_models = @project.ifc_models
+                              .includes(:attachments)
+                              .order("#{IfcModels::IfcModel.table_name}.created_at ASC")
       end
 
       def permitted_model_params
-        params
-            .require(:bim_ifc_models_ifc_model)
-            .permit("title", "ifc_attachment", "is_default")
+        params.require(:bim_ifc_models_ifc_model)
+              .permit("title", "ifc_attachment", "is_default")
       end
 
       def find_ifc_model_object

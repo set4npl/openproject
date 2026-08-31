@@ -49,6 +49,7 @@ Rails.application.routes.draw do
           get :defaults
           get :direct_upload_finished
           post :set_direct_upload_file_name
+          post :set_direct_upload_default_value
         end
       end
     end
