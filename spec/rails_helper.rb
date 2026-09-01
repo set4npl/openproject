@@ -28,6 +28,9 @@
 # See COPYRIGHT and LICENSE files for more details.
 
 ENV["RAILS_ENV"] ||= "test"
+# Preserve upstream Community-mode test expectations unless a SET4NPL-specific
+# example explicitly enables the fork feature set.
+ENV["OPENPROJECT_SET4NPL_FEATURES"] ||= "none"
 require_relative "../config/environment"
 require "factory_bot"
 require "factory_bot_rails"

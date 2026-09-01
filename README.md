@@ -1,4 +1,9 @@
 # OpenProject
+
+> **SET4NPL fork:** The `set4npl-17.7` branch carries a deliberately small,
+> independently maintained feature-entitlement layer for SET4NPL's sovereign
+> deployment. See [SET4NPL_FORK.md](SET4NPL_FORK.md) for the exact feature set,
+> build instructions, security boundaries and upgrade procedure.
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/opf/openproject)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/opf/openproject)
 ![GitHub branch checks state](https://img.shields.io/github/checks-status/opf/openproject/dev)
