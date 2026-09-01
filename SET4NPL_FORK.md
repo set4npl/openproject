@@ -18,6 +18,7 @@ repository:
 - Gantt PDF export
 - Baseline comparison
 - Work-package relation columns
+- Sharing individual work packages with users outside the project
 - Automatic work-package subject generation
 - Exact time-entry restrictions
 - External-link warnings
@@ -58,7 +59,7 @@ Build a production image from the repository root:
 
 ```bash
 docker build -f docker/prod/Dockerfile --target slim \
-  -t ghcr.io/set4npl/openproject:17.7.2-set4npl.1 .
+  -t ghcr.io/set4npl/openproject:17.7.2-set4npl.2 .
 ```
 
 For an all-in-one image matching OpenProject's bundled deployment shape, use

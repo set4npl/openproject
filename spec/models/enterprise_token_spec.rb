@@ -38,6 +38,7 @@ RSpec.describe EnterpriseToken do
     it "allows SET4NPL features without requiring an Enterprise token" do
       expect(described_class.allows_to?(:mcp_server)).to be(true)
       expect(described_class.allows_to?(:define_custom_style)).to be(true)
+      expect(described_class.allows_to?(:work_package_sharing)).to be(true)
     end
 
     it "does not grant unrelated Enterprise features" do
