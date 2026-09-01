@@ -26,6 +26,7 @@ RSpec.describe OpenProject::Set4npl::Features do
         :placeholder_users,
         :time_entry_time_restrictions,
         :work_package_query_relation_columns,
+        :work_package_sharing,
         :work_package_subject_generation
       )
     end
