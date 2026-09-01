@@ -27,6 +27,9 @@
 #
 # See COPYRIGHT and LICENSE files for more details.
 #++
+
+require "open_project/set4npl/features"
+
 class EnterpriseToken < ApplicationRecord
   EXPIRING_SOON_DAYS = 30
 
@@ -54,7 +57,8 @@ class EnterpriseToken < ApplicationRecord
     end
 
     def allows_to?(feature)
-      active_tokens.any? { |token| Authorization::EnterpriseService.new(token).call(feature).result }
+      OpenProject::Set4npl::Features.enabled?(feature) ||
+        active_tokens.any? { |token| Authorization::EnterpriseService.new(token).call(feature).result }
     end
 
     def active?
@@ -66,11 +70,11 @@ class EnterpriseToken < ApplicationRecord
     end
 
     def available_features
-      active_tokens.map(&:available_features).inject(Set.new, :|)
+      token_features(active_tokens) | OpenProject::Set4npl::Features.enabled
     end
 
     def non_trialling_features
-      active_non_trial_tokens.map(&:available_features).inject(Set.new, :|)
+      token_features(active_non_trial_tokens) | OpenProject::Set4npl::Features.enabled
     end
 
     def trialling_features
@@ -112,6 +116,10 @@ class EnterpriseToken < ApplicationRecord
         .find(proc { [] }, &:present?)
         .map(&:max_active_users)
         .max
+    end
+
+    def token_features(tokens)
+      tokens.map(&:available_features).inject(Set.new, :|)
     end
   end
 

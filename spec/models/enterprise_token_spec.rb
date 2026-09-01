@@ -33,6 +33,18 @@ require "spec_helper"
 RSpec.describe EnterpriseToken do
   include EnterpriseTokenFactory
 
+  describe ".allows_to?",
+           with_env: { "OPENPROJECT_SET4NPL_FEATURES" => "all" } do
+    it "allows SET4NPL features without requiring an Enterprise token" do
+      expect(described_class.allows_to?(:mcp_server)).to be(true)
+      expect(described_class.allows_to?(:define_custom_style)).to be(true)
+    end
+
+    it "does not grant unrelated Enterprise features" do
+      expect(described_class.allows_to?(:portfolio_management)).to be(false)
+    end
+  end
+
   describe ".active?" do
     context "without any tokens" do
       it "returns false" do
@@ -386,6 +398,20 @@ RSpec.describe EnterpriseToken do
       it "returns an empty array" do
         expect(described_class.available_features).to be_empty
       end
+    end
+
+    context "with the SET4NPL feature set enabled",
+            with_env: { "OPENPROJECT_SET4NPL_FEATURES" => "all" } do
+      it "returns the SET4NPL features without a token" do
+        expect(described_class.available_features).to eq(OpenProject::Set4npl::Features::DEFAULT)
+      end
+    end
+  end
+
+  describe ".non_trialling_features",
+           with_env: { "OPENPROJECT_SET4NPL_FEATURES" => "all" } do
+    it "classifies SET4NPL features as non-trial features" do
+      expect(described_class.non_trialling_features).to include(*OpenProject::Set4npl::Features::DEFAULT)
     end
   end
 
