@@ -22,6 +22,9 @@ repository:
 - Exact time-entry restrictions
 - External-link warnings
 - Placeholder users
+- Portfolios and programs
+- Team planners
+- Resource management and capacity planning
 
 The implementation is centralized in
 `lib/open_project/set4npl/features.rb`. Existing signed Enterprise tokens still
@@ -68,7 +71,7 @@ Build a production image from the repository root:
 
 ```bash
 docker build -f docker/prod/Dockerfile --target slim \
-  -t ghcr.io/set4npl/openproject:17.9.6-set4npl.1 .
+  -t ghcr.io/set4npl/openproject:17.9.6-set4npl.2 .
 ```
 
 For an all-in-one image matching OpenProject's bundled deployment shape, use

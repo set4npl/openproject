@@ -39,10 +39,13 @@ RSpec.describe EnterpriseToken do
       expect(described_class.allows_to?(:mcp_server)).to be(true)
       expect(described_class.allows_to?(:define_custom_style)).to be(true)
       expect(described_class.allows_to?(:work_package_sharing)).to be(true)
+      expect(described_class.allows_to?(:portfolio_management)).to be(true)
+      expect(described_class.allows_to?(:team_planner_view)).to be(true)
+      expect(described_class.allows_to?(:resource_management)).to be(true)
     end
 
     it "does not grant unrelated Enterprise features" do
-      expect(described_class.allows_to?(:portfolio_management)).to be(false)
+      expect(described_class.allows_to?(:scim_api)).to be(false)
     end
   end
 

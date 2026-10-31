@@ -25,6 +25,9 @@ module OpenProject
           gantt_pdf_export
           mcp_server
           placeholder_users
+          portfolio_management
+          resource_management
+          team_planner_view
           time_entry_time_restrictions
           work_package_sharing
           work_package_subject_generation

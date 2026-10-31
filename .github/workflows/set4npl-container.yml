@@ -14,7 +14,7 @@ on:
       image_tag:
         description: Immutable image tag
         required: true
-        default: 17.9.6-set4npl.1
+        default: 17.9.6-set4npl.2
         type: string
 
 permissions:

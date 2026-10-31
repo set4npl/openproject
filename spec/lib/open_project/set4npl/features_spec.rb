@@ -24,6 +24,9 @@ RSpec.describe OpenProject::Set4npl::Features do
         :gantt_pdf_export,
         :mcp_server,
         :placeholder_users,
+        :portfolio_management,
+        :resource_management,
+        :team_planner_view,
         :time_entry_time_restrictions,
         :work_package_sharing,
         :work_package_subject_generation
@@ -37,7 +40,7 @@ RSpec.describe OpenProject::Set4npl::Features do
 
     it "does not grant features outside the selected set",
        with_env: { "OPENPROJECT_SET4NPL_FEATURES" => "all" } do
-      expect(described_class.enabled?(:portfolio_management)).to be(false)
+      expect(described_class.enabled?(:scim_api)).to be(false)
     end
 
     it "accepts string feature names",
