@@ -59,6 +59,18 @@ RSpec.describe "MCP tools/list" do
   context "when the mcp_server enterprise feature is enabled", with_ee: %i[mcp_server] do
     it_behaves_like "MCP result response"
 
+    context "when accepting an initialization notification" do
+      let(:request_body) { { jsonrpc: "2.0", method: "notifications/initialized" } }
+
+      it "returns HTTP 202 without a JSON response body" do
+        subject
+
+        expect(last_response).to have_http_status(202)
+        expect(last_response.headers["Content-Type"]).to include("application/json")
+        expect(last_response.body).to be_empty
+      end
+    end
+
     it "includes the search_projects tool" do
       subject
 

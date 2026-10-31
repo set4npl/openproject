@@ -1,9 +1,9 @@
 # SET4NPL OpenProject fork
 
 This repository is SET4NPL's GPLv3 fork of OpenProject. The production branch
-`set4npl-17.7` starts at the upstream `v17.7.2` tag so that its application and
-database schema match the version initially deployed at
-`projects.set4nepal.org`.
+`set4npl-17.9` starts at the upstream `v17.9.6` tag. The earlier production
+release, `17.7.2-set4npl.2`, is retained on `set4npl-17.7` for recovery with a
+matching pre-upgrade database and attachment backup.
 
 This fork is independently maintained by SET4NPL. It is not OpenProject
 Enterprise Edition and does not include an OpenProject support subscription.
@@ -17,7 +17,6 @@ repository:
 - Custom theme, logo, favicon and PDF styling
 - Gantt PDF export
 - Baseline comparison
-- Work-package relation columns
 - Sharing individual work packages with users outside the project
 - Automatic work-package subject generation
 - Exact time-entry restrictions
@@ -51,7 +50,17 @@ Entitlement does not automatically expose data. An administrator must enable
 the MCP server and its individual tools/resources under Administration. MCP
 clients must authenticate with a personal API token or OAuth token carrying the
 `mcp` scope, and normal OpenProject visibility rules still apply. The MCP tools
-shipped in OpenProject 17.7.2 are read-only.
+shipped in OpenProject 17.9.6 include work-package, comment, relation and
+time-entry writes. Review the enabled tools during deployment; new tool
+configurations are enabled by the upstream seeder by default.
+
+Relation columns and date alerts are now Community features. They do not need
+SET4NPL entitlements. Multiple target versions remain a separate, irreversible
+administrator opt-in and are not enabled by this fork.
+
+The MCP endpoint returns HTTP 202 with an empty body when the MCP library
+accepts a notification without producing a response. This permits strict
+Streamable HTTP clients, including Codex, to complete initialization.
 
 ## Build an image
 
@@ -59,7 +68,7 @@ Build a production image from the repository root:
 
 ```bash
 docker build -f docker/prod/Dockerfile --target slim \
-  -t ghcr.io/set4npl/openproject:17.7.2-set4npl.2 .
+  -t ghcr.io/set4npl/openproject:17.9.6-set4npl.1 .
 ```
 
 For an all-in-one image matching OpenProject's bundled deployment shape, use

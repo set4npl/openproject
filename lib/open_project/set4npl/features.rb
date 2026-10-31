@@ -12,8 +12,6 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-require "set"
-
 module OpenProject
   module Set4npl
     module Features
@@ -28,7 +26,6 @@ module OpenProject
           mcp_server
           placeholder_users
           time_entry_time_restrictions
-          work_package_query_relation_columns
           work_package_sharing
           work_package_subject_generation
         ]
@@ -46,7 +43,11 @@ module OpenProject
         return DEFAULT if configured.empty? || configured == "all"
         return Set.new.freeze if %w[none false 0].include?(configured)
 
-        selected = configured.split(",").map { it.strip.to_sym }.to_set
+        parse_features(configured)
+      end
+
+      def parse_features(configured)
+        selected = configured.split(",").to_set { it.strip.to_sym }
         unknown = selected - DEFAULT
 
         if unknown.any?

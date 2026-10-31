@@ -62,12 +62,18 @@ module API
 
       server.resources_read_handler { |params| McpResources.read_resource(params[:uri]) }
 
-      status 200
-
       response = server.handle_json(request.body.read)
 
-      # HACK: Grape is JSON-serializing whatever we return here, but handle_json already returns serialized JSON
-      response && JSON.parse(response)
+      if response.nil?
+        env[Grape::Env::API_FORMAT] = :txt
+        content_type "application/json"
+        body false
+        status 202
+      else
+        status 200
+        # Grape serializes the endpoint result; the MCP library already returned JSON.
+        JSON.parse(response)
+      end
     end
   end
 end
